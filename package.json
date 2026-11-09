@@ -1,0 +1,12 @@
+{
+  "name": "2gis-almaty-radar-bot",
+  "version": "1.0.0",
+  "description": "Telegram Radar Bot for 2GIS Almaty Road Events & Map Comments",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
