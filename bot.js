@@ -111,27 +111,37 @@ function tgApi(method, body) {
   });
 }
 
-// Надежное получение живых дорожных событий 2ГИС по Алматы с retry
+// Надежное получение живых дорожных событий 2ГИС по Алматы
 async function fetchAlmaty2GisEvents() {
   const layers = encodeURIComponent('["camera","crash","roadwork","restriction","comment","other"]');
-  const urls = [
-    `https://tugc.2gis.com/1.0/layers/user?project=almaty&layers=${layers}`,
-    `https://tugc.2gis.ru/1.0/layers/user?project=almaty&layers=${layers}`
-  ];
+  const url = `https://tugc.2gis.com/1.0/layers/user?project=almaty&layers=${layers}`;
 
   let lastErr = null;
-  for (const url of urls) {
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      try {
-        const data = await requestJson(url);
-        if (Array.isArray(data)) return data;
-      } catch (err) {
-        lastErr = err;
-        await new Promise(r => setTimeout(r, 1000));
-      }
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const data = await requestJson(url, {
+        headers: {
+          'Host': 'tugc.2gis.com',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+          'Accept': 'application/json, text/plain, */*',
+          'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+          'Referer': 'https://2gis.kz/almaty',
+          'Origin': 'https://2gis.kz',
+          'sec-ch-ua': '"Not/A)Brand";v="8", "Chromium";v="126", "Google Chrome";v="126"',
+          'sec-ch-ua-mobile': '?0',
+          'sec-ch-ua-platform': '"Windows"',
+          'sec-fetch-dest': 'empty',
+          'sec-fetch-mode': 'cors',
+          'sec-fetch-site': 'same-site'
+        }
+      });
+      if (Array.isArray(data)) return data;
+    } catch (err) {
+      lastErr = err;
+      await new Promise(r => setTimeout(r, 1500));
     }
   }
-  throw lastErr || new Error('Не удалось связаться с сервером 2ГИС');
+  throw lastErr || new Error('Сервер 2ГИС временно недоступен');
 }
 
 // Определение улицы по координатам через каталог 2ГИС + запасной Nominatim
