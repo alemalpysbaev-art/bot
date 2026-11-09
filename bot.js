@@ -51,18 +51,23 @@ const DEFAULT_KEYWORDS = [
   'дпс', 'гаи', 'патруль', 'жолпол', 'рейд', 'проверка'
 ];
 
-// HTTP клиент
+// HTTP клиент с надежными таймаутами и fallback
 function requestJson(url, options = {}) {
   return new Promise((resolve, reject) => {
-    const req = https.get(url, {
+    const u = new URL(url);
+    const req = https.request({
+      hostname: u.hostname,
+      path: u.pathname + u.search,
+      method: options.method || 'GET',
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
         'Accept': 'application/json, text/plain, */*',
         'Referer': 'https://2gis.kz/almaty',
         'Origin': 'https://2gis.kz',
+        'Connection': 'keep-alive',
         ...(options.headers || {})
       },
-      timeout: 12000
+      timeout: 25000
     }, (res) => {
       let data = '';
       res.on('data', chunk => data += chunk);
@@ -75,7 +80,9 @@ function requestJson(url, options = {}) {
       });
     });
     req.on('error', reject);
-    req.on('timeout', () => { req.destroy(); reject(new Error('Timeout')); });
+    req.on('timeout', () => { req.destroy(); reject(new Error('ETIMEDOUT')); });
+    if (options.body) req.write(options.body);
+    req.end();
   });
 }
 
@@ -104,13 +111,27 @@ function tgApi(method, body) {
   });
 }
 
-// Получение живых дорожных событий 2ГИС по Алматы
+// Надежное получение живых дорожных событий 2ГИС по Алматы с retry
 async function fetchAlmaty2GisEvents() {
   const layers = encodeURIComponent('["camera","crash","roadwork","restriction","comment","other"]');
-  const url = `https://tugc.2gis.com/1.0/layers/user?project=almaty&layers=${layers}`;
-  const data = await requestJson(url);
-  if (!Array.isArray(data)) return [];
-  return data;
+  const urls = [
+    `https://tugc.2gis.com/1.0/layers/user?project=almaty&layers=${layers}`,
+    `https://tugc.2gis.ru/1.0/layers/user?project=almaty&layers=${layers}`
+  ];
+
+  let lastErr = null;
+  for (const url of urls) {
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const data = await requestJson(url);
+        if (Array.isArray(data)) return data;
+      } catch (err) {
+        lastErr = err;
+        await new Promise(r => setTimeout(r, 1000));
+      }
+    }
+  }
+  throw lastErr || new Error('Не удалось связаться с сервером 2ГИС');
 }
 
 // Определение улицы по координатам через каталог 2ГИС + запасной Nominatim
